@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+
+### variable initialization ###
+
+project_name="QL_AGILE-Setup"
+prefix=$AGILE
+echo $prefix
+
+numthreads=1
+build_type="Release"
+verbose=false
+# use a number of threads equals the double of the number of cores
+if [[ -a /proc/cpuinfo ]] ; then
+	numthreads=`grep -c ^processor /proc/cpuinfo`
+	let numthreads=$numthreads*2
+fi
+
+declare -a repo_install=("common_include" "PacketLib" "scriptsMVAFilter")
+declare -a cmake_repoinstall=("libQLBase" "libQL3" "libAGILE" "QL_AGILE" "AGILE_GRID_FILE_GENERATOR" "libMVAFilter" "filter_FT5")
+
+#AGILE_GRID_FILE_GENERATOR
+
+### parse command line options ###
+
+trap exit ERR
+
+function show_help {
+	echo "Usage: $0 [-hl] [-p PREFIX] [-n NUMTHREADS] [clean]"
+	echo "    -h             print this help"
+	echo "    -p PREFIX      set installation prefix"
+	echo "    -n NUMTHREADS  default number of threads is number of core * 2"
+	echo "    -d             build debug version (flags \"-O0 -g\")"
+	echo "    -v             verbose mode"
+	exit
+}
+
+while getopts "hp:ln:dv" o;
+do
+	case "${o}" in
+		h)
+			show_help
+			;;
+
+		p)
+			prefix=${OPTARG}
+			;;
+
+		n)
+			numthreads=${OPTARG}
+			;;
+
+		d)
+			build_type="Debug"
+			;;
+
+		v)
+			verbose=true
+			;;
+	esac
+done
+shift $((OPTIND-1))
+
+### check for prefix ###
+
+if [[ -z $prefix && $1 != "clean" ]] ; then
+	echo "Prefix option (-p) and \$AGILE env variable are not used. Please provide one of them."
+	exit
+fi
+
+### update environment ###
+
+export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:${prefix}/include
+export LIBRARY_PATH=$LIBRARY_PATH:${prefix}/lib
+
+if [[ $build_type == "Release" ]] ; then
+	export CFLAGS="-O3 -g -fPIC -Wall -Wno-parentheses -Wno-unused-but-set-variable"
+else
+	export CFLAGS="-O0 -g -fPIC -Wall -Wno-parentheses -Wno-unused-but-set-variable"
+fi
+export CXXFLAGS=$CFLAGS
+
+export CMAKE_INCLUDE_PATH=$CPLUS_INCLUDE_PATH
+export CMAKE_LIBRARY_PATH=$LIBRARY_PATH
+
+### build ###
+
+# workaround for CentOS 6 cmake naming..
+if [ -e /usr/bin/cmake28 ]; then
+  cmake_exe=cmake28
+else
+  cmake_exe=cmake
+fi
+
+for i in "${repo_install[@]}"
+do
+        pushd $PWD
+    cd $i
+    if [[ $1 == "clean" ]]
+    then
+        echo
+        echo "Cleaning $i..."
+        make clean
+    else
+        echo
+        echo "Building $i..."
+        make -j$numthreads
+        echo
+        echo "Installing $i..."
+        make install prefix=$prefix
+    fi
+        popd
+done
+
+for i in "${cmake_repoinstall[@]}"
+do
+    pushd $PWD
+    cd $i
+    if [[ $1 == "clean" ]]
+    then
+        echo
+        echo "Cleaning $i..."
+        rm -rf build
+    else
+        echo
+        echo "Building $i..."
+        mkdir -p build/$i
+        cd build/
+        ${cmake_exe} -DCMAKE_BUILD_TYPE=$cmake_build_type \
+          -DCMAKE_INSTALL_PREFIX:PATH=$prefix \
+          -DBoost_NO_BOOST_CMAKE=ON \
+          -DUSE_LIBASTRO=OFF \
+          ..
+		if $verbose ; then
+	        make VERBOSE=1 -j$numthreads
+		else
+			make -j$numthreads
+		fi
+        echo "Installing $1..."
+        make install
+    fi
+	popd
+done
+
+if [[ $1 != "clean" ]]
+then
+    echo "Install path: ${prefix}"
+fi
+echo "Done."

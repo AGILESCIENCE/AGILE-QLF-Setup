@@ -1,0 +1,75 @@
+DIPEDENZE
+---------
+module load root_v5.34.24
+module load cfitsio-3.370
+
+VTK
+------------
+in libraries/VTK -> c'e' la versione modificata
+
+cmake -DCMAKE_INSTALL_PREFIX:PATH=~/local.agile/vtk4
+make
+make install
+
+Fermi
+-----------
+./configure --prefix=/opt/prod/Fermi-ScienceTools-v10r0p5-fssc-20150518A
+make
+make install
+
+Attenzione: controllare che non ci siano environment caricati
+
+fermitools-v10r0p5:
+
+#%Module
+
+# Fermi init
+set path "/opt/prod/Fermi-ScienceTools-v10r0p5-fssc-20150518A/x86_64-unknown-linux-gnu-libc2.17"
+setenv       FERMI_DIR $path
+set-alias    fermiinit "source $path/fermi-init.sh"
+
+cd LATAnalysisScripts 
+python setup.py install
+
+QL_AGILE-Setup
+----------------
+Progetto QL_AGILE. Nel metti NO_MODULE a VTK se non vuoi la VTK
+
+code/CMakeLists.txt
+@@ -14,7 +14,7 @@ find_package(LibXml2 REQUIRED)
+ include_directories(${LIBXML2_INCLUDE_DIR})
+ set(LIBS ${LIBS} ${LIBXML2_LIBRARIES})
+ 
+-find_package(VTK NO_MODULE)
++find_package(VTK REQUIRED)
+ if(VTK_FOUND)
+   include(${VTK_USE_FILE})
+   include_directories(${VTK_INCLUDE_DIRS})
+
+Variabili di ambiente:
+
+export VTK_DIR=$AGILE/vtk4
+export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:$VTK_DIR/include/vtk
+export LIBRARY_PATH=$LIBRARY_PATH:$VTK_DIR/lib/vtk 
+
+NB:
+-lvtkHybrid non compilato
+
+Da aggiungere durante il linking di QL_AGILE, in fondo, prima delle librerie specifiche di AGILE
+-lvtkRendering -lvtkGraphics -lvtkImaging -lvtkFiltering -lvtkCommon  -lX11 -lXext -lvtkftgl -lGL -lXt -lSM -lICE -lX11 -lXext 
+
+
+
+Module:
+
+#%Module
+
+module load root_v5.34.24
+module load cfitsio-3.370
+
+set path /home/devel/local.agile
+setenv AGILE                 $path
+prepend-path LD_LIBRARY_PATH $path/lib
+prepend-path PATH            $path/bin
+
+
